@@ -29,6 +29,23 @@ export GROQ_API_KEY="gsk_…"   # or add to a .env file
 python -m src.evaluator
 ```
 
+### Langfuse tracing
+
+Add `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` to the environment (or your
+`.env` file) to enable tracing. `LANGFUSE_BASE_URL` is optional; set it for
+EU (`https://cloud.langfuse.com`), Japan (`https://jp.cloud.langfuse.com`), or
+a self-hosted instance. Without both keys, evaluation runs normally without
+Langfuse. When configured, each run and dataset question is traced, NeMo's
+LangChain model calls record prompts, completions, tokens, latency, and errors,
+and DeepEval judge calls record the same along with per-metric scores and
+reasons. All JSON datasets under `datasets/` are evaluated.
+
+Tracing includes evaluation inputs, expected answers, reference context, model
+outputs, and metric reasoning. Treat Langfuse access and retention settings as
+you would other systems that receive evaluation data. For GitHub Actions, add
+`LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` repository secrets, and set the
+optional `LANGFUSE_BASE_URL` repository variable when needed.
+
 The console will print a concise report similar to:
 
 ```

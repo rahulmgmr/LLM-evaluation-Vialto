@@ -14,15 +14,17 @@ from pydantic import BaseModel
 from deepeval.metrics import AnswerRelevancyMetric, GEval, HallucinationMetric
 from deepeval.models import DeepEvalBaseLLM
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+from .observability import observation
 
 
 class GroqJudge(DeepEvalBaseLLM):
     """A synchronous DeepEval judge backed by the project's Groq account."""
 
-    def __init__(self, model_name: str, temperature: float = 0.0, max_tokens: int = 1024):
+    def __init__(self, model_name: str, temperature: float = 0.0, max_tokens: int = 1024, langfuse=None):
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.langfuse = langfuse
         self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
     def load_model(self):
@@ -42,8 +44,26 @@ class GroqJudge(DeepEvalBaseLLM):
             # Groq's JSON mode plus the schema instructions in DeepEval's
             # prompt lets us return the structured object expected by metrics.
             request["response_format"] = {"type": "json_object"}
-        response = self.client.chat.completions.create(**request)
-        content = response.choices[0].message.content or ""
+        with observation(
+            self.langfuse,
+            name="DeepEval judge call",
+            as_type="generation",
+            model=self.model_name,
+            model_parameters={"temperature": self.temperature, "max_tokens": self.max_tokens},
+            input=request["messages"],
+        ) as generation:
+            response = self.client.chat.completions.create(**request)
+            content = response.choices[0].message.content or ""
+            usage = getattr(response, "usage", None)
+            if generation is not None:
+                generation.update(
+                    output=content,
+                    usage_details={
+                        "input": getattr(usage, "prompt_tokens", 0) or 0,
+                        "output": getattr(usage, "completion_tokens", 0) or 0,
+                        "total": getattr(usage, "total_tokens", 0) or 0,
+                    },
+                )
         return schema.model_validate_json(content) if schema is not None else content
 
     async def a_generate(self, prompt: str, schema: Optional[type[BaseModel]] = None):
@@ -120,6 +140,7 @@ def run_metrics(
     prompt: str,
     context: list[str],
     metrics: Optional[dict] = None,
+    langfuse=None,
 ) -> dict:
     """Measure all metrics for one fully specified DeepEval test case.
 
@@ -143,12 +164,21 @@ def run_metrics(
 
     scores = {}
     for name, metric in metrics.items():
-        metric.measure(test_case)
-        score = metric.score
+        with observation(
+            langfuse,
+            name=f"DeepEval {name}",
+            as_type="evaluator",
+            input={"input": prompt, "actual_output": generated, "expected_output": expected, "context": context},
+            metadata={"metric": name},
+        ) as metric_observation:
+            metric.measure(test_case)
+            score = metric.score
+            reason = getattr(metric, "reason", None)
+            if metric_observation is not None:
+                metric_observation.update(output={"score": score, "reason": reason})
         if score is None:
             raise RuntimeError(f"DeepEval metric {name!r} completed without a score.")
         scores[name] = float(score)
-        reason = getattr(metric, "reason", None)
         if reason:
             scores[f"{name}_reason"] = reason
     return scores

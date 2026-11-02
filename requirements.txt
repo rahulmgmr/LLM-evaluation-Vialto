@@ -1,3 +1,5 @@
 deepeval>=2.0
 groq>=0.7
 nemoguardrails>=0.14
+langfuse>=3.0,<5.0
+python-dotenv>=1.0
