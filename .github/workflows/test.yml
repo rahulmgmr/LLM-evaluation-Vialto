@@ -28,8 +28,9 @@ jobs:
         run: |
           python -m src.evaluator   # exits 0 on success
 
-      - name: Upload results artifact
+      - name: Upload Test Results
+        if: always()  # This ensures it runs even if previous steps fail
         uses: actions/upload-artifact@v4
         with:
-          name: eval-results
-          path: results.json
+            name: evaluation-results
+            path: result.json  # Update path if your json is in a subfolder
