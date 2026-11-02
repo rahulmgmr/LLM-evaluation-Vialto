@@ -68,8 +68,8 @@ async def run_one_dataset(dataset_path, client, metric_set, langfuse=None, datas
                     "relevance_reason": "No answer was generated because the expected guardrail block stopped the request.",
                     "consistency": 1.0,
                     "consistency_reason": "The expected guardrail block is consistent with this case's expected behavior.",
-                    "hallucination": 0.0,
-                    "hallucination_reason": "No answer was generated, so no unsupported claims were made.",
+                    "hallucination": 1.0,
+                    "hallucination_reason": "No answer was generated, so it is fully aligned with the supplied context.",
                 }
             else:
                 metrics = run_metrics(generated, expected, prompt, context, metric_set, langfuse=langfuse)
@@ -177,7 +177,7 @@ async def main():
             fail = True
         if s["avg_consistency"] < thresholds["consistency"]:
             fail = True
-        if s["avg_hallucination"] > thresholds["hallucination"]:
+        if s["avg_hallucination"] < thresholds["hallucination"]:
             fail = True
         if s["unexpected_guardrail_failures"] > 0:
             fail = True

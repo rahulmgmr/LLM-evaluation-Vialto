@@ -152,6 +152,11 @@ Edit `config/config.json`:
 
 Change `model_name` values to any Groq model you have access to (e.g., `llama3-8b-8192`, `mixtral-8x7b-32768`).
 
+The `hallucination` metric follows DeepEval's native context-alignment score:
+higher is better, with `1.0` indicating full alignment and `0.0` indicating no
+alignment. Its threshold is a minimum passing score, like the other DeepEval
+metrics.
+
 ## CI / GitHub Actions
 
 The `.github/workflows/test.yml` job:

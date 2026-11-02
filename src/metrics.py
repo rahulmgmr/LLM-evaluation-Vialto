@@ -172,12 +172,14 @@ def run_metrics(
             metadata={"metric": name},
         ) as metric_observation:
             metric.measure(test_case)
-            score = metric.score
+            native_score = metric.score
             reason = getattr(metric, "reason", None)
+            if native_score is None:
+                raise RuntimeError(f"DeepEval metric {name!r} completed without a score.")
+            score = float(native_score)
+            observation_output = {"score": score, "reason": reason}
             if metric_observation is not None:
-                metric_observation.update(output={"score": score, "reason": reason})
-        if score is None:
-            raise RuntimeError(f"DeepEval metric {name!r} completed without a score.")
+                metric_observation.update(output=observation_output)
         scores[name] = float(score)
         if reason:
             scores[f"{name}_reason"] = reason

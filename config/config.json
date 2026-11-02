@@ -15,6 +15,6 @@
     "accuracy": 0.70,
     "relevance": 0.80,
     "consistency": 0.50,
-    "hallucination": 0.10
+    "hallucination": 0.80
   }
 }
