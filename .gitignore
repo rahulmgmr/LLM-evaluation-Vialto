@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.egg-info/
+.venv/
+.venv_*/
+venv/
+.deepeval/
+.env
+*.env*
+
+# Results
+results.json
+
+# Poetry / Pipenv
+.pdmrc
+pdm.lock
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

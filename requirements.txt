@@ -1,0 +1,4 @@
+deepeval>=2.0
+groq>=0.7
+nemoguardrails>=0.14
+python>=3.11

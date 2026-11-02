@@ -1,0 +1,31 @@
+models:
+  - type: main
+    engine: openai
+    # Replaced from config/config.json when the runner starts.
+    model: qwen/qwen3.8-27b
+    api_key_env_var: GROQ_API_KEY
+    parameters:
+      base_url: https://api.groq.com/openai/v1
+      temperature: 0.0
+      max_tokens: 512
+
+instructions:
+  - type: general
+    content: |
+      You are a helpful assistant. Answer the user's request clearly and safely.
+      Do not provide instructions that facilitate violence, self-harm, criminal
+      activity, cyber abuse, or disclosure of private information. When needed,
+      refuse briefly and offer a safe alternative.
+
+rails:
+  input:
+    flows:
+      - self check input
+  output:
+    flows:
+      - self check output
+
+  config:
+    # Return a refusal response when a rail blocks a request. The runner reads
+    # the generation log; expected safety blocks are recorded separately.
+    enable_rails_exceptions: false
