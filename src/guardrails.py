@@ -9,6 +9,7 @@ from nemoguardrails import LLMRails, RailsConfig
 GUARDRAILS_CONFIG_DIR = Path(__file__).resolve().parent.parent / "config" / "nemo_guardrails"
 
 
+# Step 1: Configure NeMo with the system-under-test model settings.
 class NeMoGuardrailsRunner:
     """Generate answers through NeMo so both input and output rails run."""
 
@@ -32,11 +33,13 @@ class NeMoGuardrailsRunner:
 
     async def generate(self, user_input: str) -> dict[str, Any]:
         """Return the assistant response, all activated rails, and violations."""
+        # NeMo runs the configured input and output rails around generation.
         result = await self.rails.generate_async(
             messages=[{"role": "user", "content": user_input}],
             options={"log": {"activated_rails": True}},
         )
 
+        # Normalize NeMo's supported response shapes into one text value.
         response = getattr(result, "response", result)
         if isinstance(response, str):
             generated = response.strip()
@@ -62,6 +65,7 @@ class NeMoGuardrailsRunner:
                 "runtime logs for the failing rail or model call."
             )
 
+        # Preserve rail decisions so the evaluator can classify policy outcomes.
         log = getattr(result, "log", None)
         activated_rails = getattr(log, "activated_rails", []) or []
         activities = []

@@ -5,6 +5,7 @@ import atexit
 from contextlib import nullcontext
 
 
+# Step 1: Enable tracing only when a complete Langfuse credential pair exists.
 def setup_langfuse():
     """Initialize Langfuse and its LangChain callback when credentials exist."""
     try:
@@ -36,6 +37,7 @@ def setup_langfuse():
     return client, CallbackHandler()
 
 
+# Step 2: Let callers trace work or use a no-op context when tracing is off.
 def observation(client, *, name, as_type="span", **kwargs):
     """Return a no-op context when Langfuse is not configured."""
     if client is None:
@@ -43,6 +45,7 @@ def observation(client, *, name, as_type="span", **kwargs):
     return client.start_as_current_observation(name=name, as_type=as_type, **kwargs)
 
 
+# Step 3: Send any buffered observations before the evaluation process exits.
 def flush_langfuse(client):
     if client is not None:
         client.flush()

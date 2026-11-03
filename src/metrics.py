@@ -17,6 +17,7 @@ from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from .observability import observation
 
 
+# Step 1: Adapt Groq so DeepEval can use it as its evaluation judge.
 class GroqJudge(DeepEvalBaseLLM):
     """A synchronous DeepEval judge backed by the project's Groq account."""
 
@@ -71,6 +72,7 @@ class GroqJudge(DeepEvalBaseLLM):
         return self.generate(prompt, schema)
 
 
+# Step 2: Build the metric set once, using the configured judge and thresholds.
 def build_metrics(judge: DeepEvalBaseLLM, thresholds: dict):
     """Create metrics once per run so judge configuration stays consistent."""
     return {
@@ -134,6 +136,7 @@ def build_metrics(judge: DeepEvalBaseLLM, thresholds: dict):
     }
 
 
+# Step 3: Score one generated answer and keep each metric's score and reason.
 def run_metrics(
     generated: str,
     expected: str,
