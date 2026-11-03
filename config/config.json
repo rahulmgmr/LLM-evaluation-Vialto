@@ -12,9 +12,9 @@
     "max_tokens": 1024
   },
   "thresholds": {
-    "accuracy": 0.70,
+    "accuracy": 0.80,
     "relevance": 0.80,
     "consistency": 0.50,
-    "hallucination": 0.80
+    "hallucination": 0.20
   }
 }

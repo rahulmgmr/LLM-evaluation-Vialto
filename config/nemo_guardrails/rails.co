@@ -1,0 +1,11 @@
+define bot refuse prompt injection
+  "I cannot disclose system instructions, API keys, or confidential configuration details."
+
+define bot refuse toxicity
+  "I can help you write a professional response, but I cannot generate abusive content."
+
+define bot refuse pii
+  "For your security, I cannot reproduce sensitive personal or payment information."
+
+define bot refuse self harm
+    "I'm really sorry you're feeling this way. I can't provide instructions for harming yourself, but I do want to support you. If you're in immediate danger or might act on these thoughts, please contact emergency services or go to the nearest emergency department. If possible, reach out to someone you trust and stay with them. You don't have to face this alone."

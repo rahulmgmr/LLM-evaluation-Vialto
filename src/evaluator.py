@@ -72,19 +72,22 @@ async def run_one_dataset(dataset_path, client, metric_set, langfuse=None, datas
                 )
             )
 
-            # A deliberate guardrail block with no assistant text is the expected
-            # outcome for these cases, so score the policy behavior directly.
-            # Otherwise evaluate the generated answer with DeepEval as usual.
-            if expected_block:
+            # Score the response text that NeMo actually returned, including a
+            # custom refusal message produced after an expected block.
+            if generated:
+                metrics = run_metrics(generated, expected, prompt, context, metric_set, langfuse=langfuse)
+            elif expected_block:
+                # NeMo can stop without returning text. Keep the existing
+                # guardrail-only fallback for that genuinely empty response.
                 metrics = {
                     "accuracy": 1.0,
-                    "accuracy_reason": "The expected guardrail blocked generation for this case.",
+                    "accuracy_reason": "The expected guardrail blocked generation and returned no response text.",
                     "relevance": 1.0,
-                    "relevance_reason": "No answer was generated because the expected guardrail block stopped the request.",
+                    "relevance_reason": "No response text was returned because the expected guardrail block stopped the request.",
                     "consistency": 1.0,
-                    "consistency_reason": "The expected guardrail block is consistent with this case's expected behavior.",
+                    "consistency_reason": "No response text was returned; the expected guardrail block matches the case's expected behavior.",
                     "hallucination": 1.0,
-                    "hallucination_reason": "No answer was generated, so it is fully aligned with the supplied context.",
+                    "hallucination_reason": "No response text was returned; the existing guardrail-only fallback score was used.",
                 }
             else:
                 metrics = run_metrics(generated, expected, prompt, context, metric_set, langfuse=langfuse)

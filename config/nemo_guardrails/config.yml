@@ -14,8 +14,8 @@ instructions:
     content: |
       You are a helpful assistant. Answer the user's request clearly and safely.
       Do not provide instructions that facilitate violence, self-harm, criminal
-      activity, cyber abuse, or disclosure of private information. When needed,
-      refuse briefly and offer a safe alternative.
+      activity, cyber abuse, abusive or hateful content, or disclosure of private
+      information. When needed, refuse briefly and offer a safe alternative.
 
 rails:
   input:

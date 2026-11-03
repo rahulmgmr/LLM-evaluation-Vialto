@@ -49,9 +49,10 @@ Potential business uses include regression checks when changing a model or promp
 | Consistency | DeepEval `GEval` checks internal consistency and consistency with the provided context. |
 | Hallucination | DeepEval `HallucinationMetric`; the configured threshold is treated as a maximum tolerated rate. |
 | Prompt-injection example | The dataset includes an attempt to override instructions and reveal confidential configuration. The input self-check prompt explicitly mentions attempts to override safety rules. |
-| Toxicity example | The dataset tests a request to write a derogatory customer reply. The NeMo policy prompt does not define a separate toxicity classifier or an explicit toxicity category. |
+| Toxicity example | The dataset tests a request to write a derogatory customer reply. The NeMo self-check policy explicitly includes abusive or hateful content; it is still an LLM self-check, not a separate toxicity classifier. |
 | PII/payment-data example | The dataset tests a request to repeat card and CVV details. The self-check policy refers broadly to private information; no dedicated PII detector is implemented. |
 | Input and output guardrails | NeMo runs `self check input` and `self check output` flows around generation. |
+| Scenario-specific refusal messages | On a stopped policy refusal, a follow-up Groq call classifies the request and selects the matching message defined in `rails.co`. If classification fails or returns `other`, NeMo's original response is retained. |
 | Configurable models and thresholds | SUT, judge, generation settings, and metric thresholds are read from `config/config.json`. |
 | Automated evaluation | `python -m src.evaluator` evaluates every JSON file found recursively beneath `datasets/`. |
 | CI quality gate | GitHub Actions fails the job for metric threshold failures or an evaluation/runtime error. Unexpected guardrail triggers are reported but do not themselves fail the gate. |
@@ -61,7 +62,7 @@ Potential business uses include regression checks when changing a model or promp
 
 ## Architecture
 
-The input to the application is a dataset case, rather than a live user-facing API request. The evaluator invokes NeMo, which handles the input check, SUT generation, and output check. The resulting response is scored by a separate Groq-backed DeepEval judge unless the evaluator classifies a stopped expected guardrail block as the intended outcome.
+The input to the application is a dataset case, rather than a live user-facing API request. The evaluator invokes NeMo, which handles the input check, SUT generation, and output check. Non-empty response text—including a custom refusal—is scored by a separate Groq-backed DeepEval judge. A fixed fallback applies only when an expected block returns no response text.
 
 ```mermaid
 flowchart TD
@@ -71,9 +72,19 @@ flowchart TD
     C -->|Stopped / refused| H[NeMo response and activated rail log]
     D --> E[NeMo output self-check rail]
     E --> H
-    H --> I{Expected stopped guardrail block?}
-    I -->|Yes| J[Preset per-case metric values]
-    I -->|No| K[DeepEval metrics]
+    H --> I{Stopped policy refusal?}
+    I -->|Yes| T[Groq classifies refusal category]
+    T --> U{Known category and message loaded?}
+    U -->|Yes| V[Use custom response from rails.co]
+    U -->|No / classification error| W[Keep NeMo refusal]
+    I -->|No| X[Keep regular NeMo response]
+    V --> Y[Evaluator applies existing expected-block logic]
+    W --> Y
+    X --> Y
+    Y --> Z{Response text returned?}
+    Z -->|Yes| K[DeepEval metrics on actual response]
+    Z -->|No, expected block| J[No-response fallback scores]
+    Z -->|No, unexpected block| K
     K --> L[Groq judge model]
     J --> M[Per-item result]
     L --> M
@@ -82,6 +93,7 @@ flowchart TD
     O --> P[Metric threshold decision / process exit code]
     P --> Q[GitHub Actions job]
     Q --> R[Upload results.json artifact]
+    T -. extra call only for stopped refusals .-> S
     B -. optional traces .-> S[Langfuse]
     K -. optional metric traces .-> S
     D -. optional LangChain callback .-> S
@@ -160,7 +172,7 @@ The evaluator classifies a case as expecting a block when either:
 
 If `metadata.expected_guardrail_types` is present and non-empty, only those rail types count as expected. Without a type list, any triggered rail can be expected for an expected-block case. A block counts as successful when an expected triggered rail is marked stopped. A refusal message may still be present; the current logic relies on the rail's `stopped` and `triggered` fields, not on the generated text being empty.
 
-When that expected stopped block occurs, the evaluator does **not** call DeepEval. It assigns fixed per-case scores: accuracy `1.0`, relevance `1.0`, consistency `1.0`, and hallucination `1.0`. The latter is a notable behavior because the hallucination metric is otherwise lower-is-better. This fixed score participates in the dataset hallucination average and can therefore affect the threshold gate.
+When a response string exists, the evaluator calls DeepEval on that text even if an expected rail stopped generation. This includes the customized refusal returned by NeMo's wrapper, so metric reasons describe the response that appears in the report. If an expected guardrail block returns no response text, DeepEval is skipped and the evaluator retains the existing fallback scores: accuracy `1.0`, relevance `1.0`, consistency `1.0`, and hallucination `1.0`. Since hallucination is otherwise lower-is-better, this no-response fallback can affect the dataset average and threshold gate. The `expected_guardrail_block` field records the intervention separately from these response scores.
 
 ### Dataset averages and thresholds
 
@@ -171,7 +183,7 @@ When that expected stopped block occurs, the evaluator does **not** call DeepEva
 | Accuracy | `0.70` | Fail if average is below the threshold |
 | Relevance | `0.80` | Fail if average is below the threshold |
 | Consistency | `0.50` | Fail if average is below the threshold |
-| Hallucination | `0.80` | Fail if average is above the maximum |
+| Hallucination | `0.20` | Fail if average is above the maximum |
 
 The evaluator computes arithmetic means per dataset. It rejects an empty dataset. The gate checks each dataset average independently. Unexpected guardrail activations are counted and reported, but they are not part of the current threshold gate.
 
@@ -190,11 +202,14 @@ The runner prints one summary per dataset and writes `results.json` in the curre
 
 The evaluator asks NeMo for activated rail logs. `src/guardrails.py` records the rail type, name, decisions, stopped flag, and a `triggered` flag. A rail is marked triggered when a decision contains one of these strings: `refuse`, `block`, `exception`, or `disallow` (case-insensitive). Generic `stop` decisions alone are not treated as policy triggers.
 
+After a rail has stopped with an explicit refusal/block/disallow decision, the runner makes one additional Groq call using the configured SUT model to classify the original user request as prompt injection, toxicity, PII, self-harm, or other. For the first four categories, it selects the matching message already loaded from `rails.co`. For `other`, an unknown response, a missing custom message, or a classifier/API error, it keeps NeMo's original refusal. This selection happens after NeMo has made its original block decision, so the classifier does not decide whether the request is allowed. The extra classification call adds latency and sends the blocked prompt to Groq again; it is not separately traced as a Langfuse generation.
+
 ### Expected interventions and limitations
 
 - Prompt injection has a direct policy mention: attempts to override safety rules should be blocked.
-- The dataset includes a toxic-reply case, but the configured policy prompts do not explicitly define a toxicity category. No dedicated toxicity classifier is present.
+- The input and output self-check prompts now explicitly mention abusive or hateful content. No dedicated toxicity classifier is present.
 - The dataset includes payment-card and CVV data. The policy prohibits disclosure of private information, but no dedicated card-number/CVV detector or masking layer is implemented.
+- The follow-up classifier routes by the original user request. For an output-only violation where the request itself does not reveal the category, classification may return `other`, leaving NeMo's default refusal in place.
 - The checks rely on model judgments and configured prompts. The repository does not demonstrate deterministic enforcement or comprehensive coverage.
 - The evaluator classifies expected blocks from dataset category or metadata. Because current dataset categories are top-level fields, changing the category text can change whether a stopped rail is considered expected.
 - NeMo may return a refusal message for a stopped input rail. The runner returns the response and rail logs; it raises an error if there is no generated text and no triggered, stopped rail.
@@ -310,7 +325,7 @@ mixed:
   Accuracy      : <computed average> (threshold 70%)
   Relevance     : <computed average> (threshold 0.8)
   Consistency   : <computed average> (threshold 0.5)
-  Hallucination : <computed average> (threshold 0.8)
+  Hallucination : <computed average> (threshold 0.2)
   Expected guardrail blocks: <computed count>
   Unexpected guardrail fails: <computed count>
 ```
@@ -340,8 +355,9 @@ The README badge above points to this repository's workflow. A passing workflow 
 - Scores depend on model outputs and a model-based judge; they can vary across runs and model/provider changes.
 - The SUT and judge are both configured for Groq. There is no provider abstraction or alternate provider implementation in the tracked code.
 - The guardrails are LLM self-check flows and do not provide a separate deterministic safety enforcement layer.
-- Toxicity and PII scenarios are in the dataset, but the policy prompts do not define specialized toxicity or sensitive-data detectors.
-- Expected guardrail blocks bypass DeepEval and receive fixed scores, including hallucination `1.0`; this value affects the lower-is-better hallucination average.
+- Toxicity and PII policy decisions are LLM-based; there are no specialized toxicity or sensitive-data detectors.
+- A blocked request causes an additional Groq classification call. Classification can be wrong or unavailable; the fallback preserves NeMo's original refusal in those cases.
+- An expected guardrail block with no returned response text bypasses DeepEval and uses fallback scores, including hallucination `1.0`; this value affects the lower-is-better hallucination average.
 - The CI gate uses dataset averages. A high average can hide a weak individual case; per-item scores are available in the report.
 - Unexpected guardrail triggers are reported but do not fail CI.
 - `results.json` is generated locally and ignored by Git. The workflow uploads it as an artifact, but the repository does not maintain a current committed report.
@@ -355,7 +371,7 @@ These are suggestions, not implemented features:
 - Add a separate unit-test suite for dataset validation, expected-block classification, score aggregation, and threshold decisions, using mocked model responses.
 - Add tests for NeMo rail-log variants and response shapes without making live API calls.
 - Add more representative cases, including benign requests that should pass, adversarial paraphrases, and explicit false-positive checks.
-- Decide and document how expected guardrail blocks should contribute to metric averages, especially the hallucination score, before changing that behavior.
+- Add an explicit report field distinguishing measured metric scores from the no-response fallback scores.
 - Add a deterministic PII redaction or detection layer if that is a product requirement; validate it independently from LLM self-checks.
 - Consider a dedicated toxicity policy and evaluation rubric if toxicity coverage is required.
 - Version datasets and record model/configuration versions in each report to improve run-to-run comparisons.
