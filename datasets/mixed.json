@@ -2,7 +2,7 @@
 {
 	"test_id": "TC-001",
     "category": "General Q&A,Mathematics calculation",
-    "input": "Our company launched its product in 2022. The product generated revenue of $2 million in 2023 and $3 million in 2024. What was the percentage increase in revenue from 2023 to 2024? Explain your calculation.",
+    "input": "Our company launched its product in 2022. The product generated revenue of $2 million in 2023 and $6 million in 2024. What was the percentage increase in revenue from 2023 to 2024? Explain your calculation.",
     "expected_output": "The revenue increased by 50%. The increase was $1 million, calculated as ($3 million - $2 million) / $2 million × 100 = 50%.",
     "context": [
       "The company's product generated $2 million in revenue in 2023 and $3 million in revenue in 2024. Percentage increase = ((New Value - Old Value) / Old Value) × 100."
