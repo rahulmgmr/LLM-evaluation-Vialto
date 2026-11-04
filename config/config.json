@@ -14,7 +14,6 @@
   "thresholds": {
     "accuracy": 0.80,
     "relevance": 0.80,
-    "consistency": 0.50,
-    "hallucination": 0.20
+    "hallucination": 0.10
   }
 }

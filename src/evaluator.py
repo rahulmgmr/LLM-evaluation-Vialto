@@ -1,7 +1,13 @@
 import json, sys, asyncio
 sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
-from .metrics import GroqJudge, build_metrics, run_metrics
+from .metrics import (
+    GroqJudge,
+    build_metrics,
+    combine_accuracy_with_reference_validity,
+    run_metrics,
+    run_reference_validity,
+)
 from .guardrails import NeMoGuardrailsRunner
 from .observability import setup_langfuse, observation, flush_langfuse
 
@@ -84,11 +90,24 @@ async def run_one_dataset(dataset_path, client, metric_set, langfuse=None, datas
                     "accuracy_reason": "The expected guardrail blocked generation and returned no response text.",
                     "relevance": 1.0,
                     "relevance_reason": "No response text was returned because the expected guardrail block stopped the request.",
-                    "consistency": 1.0,
-                    "consistency_reason": "No response text was returned; the expected guardrail block matches the case's expected behavior.",
                     "hallucination": 1.0,
                     "hallucination_reason": "No response text was returned; the existing guardrail-only fallback score was used.",
                 }
+                reference_scores = run_reference_validity(
+                    expected,
+                    prompt,
+                    context,
+                    metric_set["reference_validity"],
+                    langfuse=langfuse,
+                )
+                combined_accuracy = combine_accuracy_with_reference_validity(
+                    answer_accuracy=metrics["accuracy"],
+                    answer_accuracy_reason=metrics["accuracy_reason"],
+                    reference_validity=reference_scores["reference_validity"],
+                    reference_validity_reason=reference_scores["reference_validity_reason"],
+                )
+                metrics["accuracy"] = combined_accuracy["accuracy"]
+                metrics["accuracy_reason"] = combined_accuracy["accuracy_reason"]
             else:
                 metrics = run_metrics(generated, expected, prompt, context, metric_set, langfuse=langfuse)
 
@@ -161,7 +180,6 @@ async def main():
             raise ValueError(f"Dataset {ds!r} is empty.")
         avg_acc = sum(m["accuracy"] for m in items) / len(items)
         avg_rel = sum(m["relevance"] for m in items) / len(items)
-        avg_cons = sum(m["consistency"] for m in items) / len(items)
         avg_hall = sum(m["hallucination"] for m in items) / len(items)
         guard_failures = sum(1 for i in items for g in i["unexpected_guardrails"])
         expected_blocks = sum(1 for i in items if i["expected_guardrail_block"])
@@ -169,7 +187,6 @@ async def main():
         summary[ds] = {
             "avg_accuracy": avg_acc,
             "avg_relevance": avg_rel,
-            "avg_consistency": avg_cons,
             "avg_hallucination": avg_hall,
             "expected_guardrail_blocks": expected_blocks,
             "unexpected_guardrail_failures": guard_failures,
@@ -181,7 +198,6 @@ async def main():
         print(f"{ds}:")
         print(f"  Accuracy      : {s['avg_accuracy']:.2%} (threshold {thresholds['accuracy']:.0%})")
         print(f"  Relevance     : {s['avg_relevance']:.2f} (threshold {thresholds['relevance']})")
-        print(f"  Consistency   : {s['avg_consistency']:.2f} (threshold {thresholds['consistency']})")
         print(f"  Hallucination : {s['avg_hallucination']:.2f} (threshold {thresholds['hallucination']})")
         print(f"  Expected guardrail blocks: {s['expected_guardrail_blocks']}")
         print(f"  Unexpected guardrail fails: {s['unexpected_guardrail_failures']}")
@@ -197,8 +213,6 @@ async def main():
         if s["avg_accuracy"] < thresholds["accuracy"]:
             fail = True
         if s["avg_relevance"] < thresholds["relevance"]:
-            fail = True
-        if s["avg_consistency"] < thresholds["consistency"]:
             fail = True
         # DeepEval 3.7.2 uses the native hallucination direction: lower is
         # better, so the configured threshold is a maximum tolerated score.
