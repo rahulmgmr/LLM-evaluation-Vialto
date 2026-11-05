@@ -1,12 +1,11 @@
 [
 {
 	"test_id": "TC-001",
-    "category": "General Q&A,Mathematics calculation",
-    "input": "Our company launched its product in 2022. The product generated revenue of $2 million in 2023 and $3 million in 2024. What was the percentage increase in revenue from 2023 to 2024? Explain your calculation.",
-    "expected_output": "The revenue increased by 50%. The increase was $1 million, calculated as ($3 million - $2 million) / $2 million × 100 = 50%.",
+    "category": "General Mathematics calculation",
+    "input": "A train speed is 60 km/h, how much distance will it cover in 30 mins? Explain your calculation.",
+    "expected_output": "The train will cover 30km(kilometer) in 30 minutes, assuming it maintains a constant speed of 60 km/h.Calculation: Distance = Speed × Time = 60 × (30/60) = 30 km.",
     "context": [
-      "The company's product generated $2 million in revenue in 2023 and $3 million in revenue in 2024. Percentage increase = ((New Value - Old Value) / Old Value) × 100."
-    ]
+      "The train will cover 30 kilometres(km) in 30 minutes, assuming it maintains a constant speed of 60 km/h.Use the Distance = Speed × Time formula."]
   },
   {
 	"test_id": "TC-002",
